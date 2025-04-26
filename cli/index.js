@@ -4,19 +4,82 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const {v4: uuidv4} = require('uuid');
+const { v4: uuidv4 } = require('uuid');
+const readline = require('readline');
 
 const program = new Command();
 
+const CONFIG_DIR = path.join(os.homedir(), '.climos');
+const TOKEN_PATH = path.join(CONFIG_DIR, 'token.json');
+
+function saveToken(token) {
+  if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(TOKEN_PATH, JSON.stringify({ token }), { mode: 0o600 });
+}
+
+function loadToken() {
+  if (!fs.existsSync(TOKEN_PATH)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
+    return data.token;
+  } catch {
+    return null;
+  }
+}
+
+async function prompt(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => rl.question(question, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
+
+
 program
-  .name('CLIMOS')
-  .description('A CLI tool to record your terminal session and report metadata using screenpipe.')
-  .version('1.0.0'); 
+  .command('login')
+  .description('Login to CLIMOS')
+  .action(async () => {
+    const username = await prompt('Username: ');
+    const password = await prompt('Password: ');
+
+    try {
+      const response = await axios.post('http://localhost:3000/login', { username, password });
+      const token = response.data.token;
+      saveToken(token);
+      console.log('Login successful!');
+    } catch (error) {
+      console.error('Login failed:', error.response?.data?.error || error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('logout')
+  .description('Logout from CLIMOS CLI')
+  .action(() => {
+    try {
+      if (fs.existsSync(TOKEN_PATH)) {
+        fs.unlinkSync(TOKEN_PATH);
+        console.log('Successfully logged out.');
+      } else {
+        console.log('You are not logged in.');
+      }
+    } catch (err) {
+      console.error('Error during logout:', err.message);
+    }
+  });
 
 program
   .command('report')
   .description('Start a screen recording and generate a report')
   .action(() => {
+    const token = loadToken();
+    if (!token) {
+      console.error('You must login first. Run: climos login');
+      process.exit(1);
+    }
+
     const problemId = uuidv4();
     const tmpDir = os.tmpdir();
     const timestamp = Date.now();
@@ -38,7 +101,7 @@ program
 
         if (code !== 0) {
           console.error(`CLIMOS screenpipe exited with code ${code}`);
-          try { fs.unlinkSync(filepath); } catch {}
+          try { fs.unlinkSync(filepath); } catch { }
           process.exit(code);
         }
 
@@ -54,12 +117,15 @@ program
         console.log(JSON.stringify(metadata, null, 2));
         console.log('\nCLIMOS Uploading recording metadata to backend...');
 
-        // POST
         try {
-          const response = await axios.post('http://localhost:3000/recordings', metadata);
+          const response = await axios.post('http://localhost:3000/recordings', metadata, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
           console.log('CLIMOS Upload response:', response.data);
         } catch (error) {
-          console.error('CLIMOS Upload failed:', error.message);
+          console.error('CLIMOS Upload failed:', error.response?.data?.error || error.message);
         }
       });
 
