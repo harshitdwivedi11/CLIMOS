@@ -5,6 +5,7 @@ const recordingSchema = new mongoose.Schema({
     platform: String,
     timestamp: Date,
     recordingPath: String,
+    resolved: {type: Boolean, default: false},
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   });
   

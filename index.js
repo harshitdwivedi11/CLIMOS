@@ -74,7 +74,37 @@ app.post('/recordings', authenticateToken, async (req, res) => {
   }
 });
 
+// Resolve
+app.patch('/recordings/resolve-last', authenticateToken, async (req, res) => {
+  const { resolved } = req.body;
+  if (typeof resolved !== 'boolean') {
+    return res.status(400).json({ error: '`resolved` must be boolean' });
+  }
 
+  try {
+    const lastRecording = await Recording.findOne({ userId: req.user.id }).sort({ timestamp: -1 });
+
+    if (!lastRecording) {
+      return res.status(404).json({ error: 'No recordings found for user' });
+    }
+
+    lastRecording.resolved = resolved;
+    await lastRecording.save();
+
+    res.json({
+      message: `Last recording marked as ${resolved ? 'resolved' : 'not resolved'}`,
+      recording: lastRecording,
+    });
+  } catch (error) {
+    console.error('Error resolving last recording:', error);
+    res.status(500).json({ error: 'Failed to update resolved status' });
+  }
+});
+
+
+
+
+//
 app.get('/bugs', async (req, res) => {
   try {
     const bugs = await Recording.find().sort({ timestamp: -1 });

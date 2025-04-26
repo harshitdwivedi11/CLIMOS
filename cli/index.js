@@ -141,4 +141,34 @@ program
     }
   });
 
+
+program
+  .command('resolve')
+  .description('Mark the last recorded bug as resolved or not resolved')
+  .option('--resolved', 'Mark as resolved (default true)', true)
+  .option('--not-resolved', 'Mark as not resolved')
+  .action(async (options) => {
+    const token = loadToken();
+    if (!token) {
+      console.error('You must login first. Run: climos login');
+      process.exit(1);
+    }
+
+    const resolved = options.notResolved ? false : true;
+
+    try {
+      const response = await axios.patch(
+        'http://localhost:3000/recordings/resolve-last',
+        { resolved },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log(`CLIMOS: ${response.data.message}`);
+    } catch (error) {
+      console.error('CLIMOS: Failed to update resolved status:', error.response?.data?.error || error.message);
+    }
+  });
+
+
+
 program.parse(process.argv);
