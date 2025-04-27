@@ -12,6 +12,8 @@ const program = new Command();
 
 const CONFIG_DIR = path.join(os.homedir(), '.climos');
 const TOKEN_PATH = path.join(CONFIG_DIR, 'token.json');
+const BACKEND_URL = 'http://localhost:3000';
+const AI_SERVICE_URL = 'http://localhost:5001';
 
 function saveToken(token) {
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
@@ -45,7 +47,7 @@ program
     const password = await prompt('Password: ');
 
     try {
-      const response = await axios.post('http://localhost:3000/login', { username, password });
+      const response = await axios.post(`${BACKEND_URL}/login`, { username, password });
       const token = response.data.token;
       saveToken(token);
       console.log('Login successful!');
@@ -119,7 +121,7 @@ program
         console.log('\nCLIMOS Uploading recording metadata to backend...');
 
         try {
-          const response = await axios.post('http://localhost:3000/recordings', metadata, {
+          const response = await axios.post(`${BACKEND_URL}/recordings`, metadata, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -158,7 +160,7 @@ program
 
     try {
       const response = await axios.patch(
-        'http://localhost:3000/recordings/resolve-last',
+        `${BACKEND_URL}/recordings/resolve-last`,
         { resolved },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -168,7 +170,6 @@ program
       console.error('CLIMOS: Failed to update resolved status:', error.response?.data?.error || error.message);
     }
   });
-
 
 
 program.parse(process.argv);
