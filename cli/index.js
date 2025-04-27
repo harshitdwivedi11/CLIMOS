@@ -7,6 +7,7 @@ const path = require('path');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const readline = require('readline');
+const FormData = require('form-data');
 
 const program = new Command();
 
@@ -73,6 +74,77 @@ program
     }
   });
 
+// program
+//   .command('report')
+//   .description('Start a screen recording and generate a report')
+//   .action(() => {
+//     const token = loadToken();
+//     if (!token) {
+//       console.error('You must login first. Run: climos login');
+//       process.exit(1);
+//     }
+
+//     const problemId = uuidv4();
+//     const tmpDir = os.tmpdir();
+//     const timestamp = Date.now();
+//     const filename = `screenpipe-${timestamp}.cast`;
+//     const filepath = path.join(tmpDir, filename);
+
+//     console.log(`\nCLIMOS Starting screen recording...`);
+//     console.log(`CLIMOS Output file: ${filepath}`);
+//     console.log(`CLIMOS Press Ctrl+C to stop recording.\n`);
+
+//     try {
+//       const outStream = fs.createWriteStream(filepath);
+//       const screenpipe = spawn('screenpipe', [], { stdio: ['inherit', 'pipe', 'inherit'] });
+
+//       screenpipe.stdout.pipe(outStream);
+
+//       screenpipe.on('close', async (code) => {
+//         outStream.close();
+
+//         if (code !== 0) {
+//           console.error(`CLIMOS screenpipe exited with code ${code}`);
+//           try { fs.unlinkSync(filepath); } catch { }
+//           process.exit(code);
+//         }
+
+//         const metadata = {
+//           problemId,
+//           hostname: os.hostname(),
+//           platform: os.platform(),
+//           timestamp: new Date().toISOString(),
+//           recordingPath: filepath,
+//         };
+
+//         console.log('\nCLIMOS Recording complete. Report:');
+//         console.log(JSON.stringify(metadata, null, 2));
+//         console.log('\nCLIMOS Uploading recording metadata to backend...');
+
+//         try {
+//           const response = await axios.post(`${BACKEND_URL}/recordings`, metadata, {
+//             headers: {
+//               Authorization: `Bearer ${token}`,
+//             },
+//           });
+//           console.log('CLIMOS Upload response:', response.data);
+//         } catch (error) {
+//           console.error('CLIMOS Upload failed:', error.response?.data?.error || error.message);
+//         }
+//       });
+
+//       process.on('SIGINT', () => {
+//         console.log('\nCLIMOS Stopping recording...');
+//         screenpipe.kill('SIGINT');
+//       });
+
+//     } catch (err) {
+//       console.error(`CLIMOS Error starting screenpipe: ${err.message}`);
+//       process.exit(1);
+//     }
+//   });
+
+
 program
   .command('report')
   .description('Start a screen recording and generate a report')
@@ -113,20 +185,33 @@ program
           hostname: os.hostname(),
           platform: os.platform(),
           timestamp: new Date().toISOString(),
-          recordingPath: filepath,
         };
 
-        console.log('\nCLIMOS Recording complete. Report:');
-        console.log(JSON.stringify(metadata, null, 2));
-        console.log('\nCLIMOS Uploading recording metadata to backend...');
+        console.log('\nCLIMOS Recording complete. Uploading recording and metadata to backend...');
 
         try {
-          const response = await axios.post(`${BACKEND_URL}/recordings`, metadata, {
+          const form = new FormData();
+          form.append('file', fs.createReadStream(filepath));
+          form.append('metadata', JSON.stringify(metadata));
+
+          const response = await axios.post(`${BACKEND_URL}/recordings`, form, {
             headers: {
+              ...form.getHeaders(),
               Authorization: `Bearer ${token}`,
             },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
           });
+
           console.log('CLIMOS Upload response:', response.data);
+
+          // Optionally delete local file after upload
+          try {
+            fs.unlinkSync(filepath);
+          } catch (err) {
+            // ignore
+          }
+
         } catch (error) {
           console.error('CLIMOS Upload failed:', error.response?.data?.error || error.message);
         }
