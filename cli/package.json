@@ -1,0 +1,23 @@
+{
+  "name": "cli",
+  "version": "1.0.0",
+  "bin": {
+    "climos": "./index.js"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "1.9.0",
+    "commander": "^13.1.0",
+    "form-data": "^4.0.2",
+    "minimal-password-prompt": "^1.1.0",
+    "readline-sync": "^1.4.10",
+    "uuid": "^11.1.0"
+  }
+}
