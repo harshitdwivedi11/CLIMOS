@@ -41,13 +41,12 @@ async function prompt(question) {
   }));
 }
 
-
 program
   .command('login')
   .description('Login to CLIMOS')
   .action(async () => {
-    const username = await prompt('Username: ');
-    const password = await passwordPrompt('Password: ');
+    const username = await prompt('Username:');
+    const password = await passwordPrompt('Password:');
 
     try {
       const response = await axios.post(`${BACKEND_URL}/login`, { username, password });
@@ -96,61 +95,63 @@ program
     console.log(`CLIMOS Output file: ${filepath}`);
     console.log(`CLIMOS Press Ctrl+C to stop recording.\n`);
 
+    let screenpipe, outStream;
+    let interrupted = false;
+
     try {
-      const outStream = fs.createWriteStream(filepath);
-      const screenpipe = spawn('screenpipe', [], { stdio: ['inherit', 'pipe', 'inherit'] });
+      outStream = fs.createWriteStream(filepath);
+      screenpipe = spawn('screenpipe', [], { stdio: ['inherit', 'pipe', 'inherit'] });
 
       screenpipe.stdout.pipe(outStream);
 
-      screenpipe.on('close', async (code) => {
-        outStream.close();
-
-        if (code !== 0) {
-          console.error(`CLIMOS screenpipe exited with code ${code}`);
-          try { fs.unlinkSync(filepath); } catch { }
-          process.exit(code);
-        }
-
-        const metadata = {
-          problemId,
-          hostname: os.hostname(),
-          platform: os.platform(),
-          timestamp: new Date().toISOString(),
-        };
-
-        console.log('\nCLIMOS Recording complete. Uploading recording and metadata to backend...');
-
-        try {
-          const form = new FormData();
-          form.append('file', fs.createReadStream(filepath));
-          form.append('metadata', JSON.stringify(metadata));
-
-          const response = await axios.post(`${BACKEND_URL}/recordings`, form, {
-            headers: {
-              ...form.getHeaders(),
-              Authorization: `Bearer ${token}`,
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-          });
-
-          console.log('CLIMOS Upload response:', response.data);
-
-          // Optionally delete local file after upload
-          try {
-            fs.unlinkSync(filepath);
-          } catch (err) {
-            // ignore
-          }
-
-        } catch (error) {
-          console.error('CLIMOS Upload failed:', error.response?.data?.error || error.message);
-        }
+      process.once('SIGINT', () => {
+        console.log('\nCLIMOS Stopping recording...');
+        interrupted = true;
+        if (screenpipe) screenpipe.kill('SIGINT');
       });
 
-      process.on('SIGINT', () => {
-        console.log('\nCLIMOS Stopping recording...');
-        screenpipe.kill('SIGINT');
+      screenpipe.on('close', async (code, signal) => {
+        outStream.close();
+
+        // --- MAIN FIX: Always proceed if interrupted is true ---
+        if (code === 0 || interrupted) {
+          const metadata = {
+            problemId,
+            hostname: os.hostname(),
+            platform: os.platform(),
+            timestamp: new Date().toISOString(),
+          };
+
+          console.log('\nCLIMOS Recording complete. Uploading recording and metadata to backend...');
+
+          try {
+            const form = new FormData();
+            form.append('file', fs.createReadStream(filepath));
+            form.append('metadata', JSON.stringify(metadata));
+
+            const response = await axios.post(`${BACKEND_URL}/recordings`, form, {
+              headers: {
+                ...form.getHeaders(),
+                Authorization: `Bearer ${token}`,
+              },
+              maxContentLength: Infinity,
+              maxBodyLength: Infinity,
+            });
+
+            console.log('CLIMOS Upload response:', response.data);
+
+            try {
+              fs.unlinkSync(filepath);
+            } catch (err) {}
+          } catch (error) {
+            console.error('CLIMOS Upload failed:', error.response?.data?.error || error.message);
+          }
+        } else {
+          // Any other failure is an error
+          console.error(`CLIMOS screenpipe exited with code ${code} and signal ${signal}`);
+          try { fs.unlinkSync(filepath); } catch { }
+          process.exit(code || 1);
+        }
       });
 
     } catch (err) {
@@ -158,7 +159,6 @@ program
       process.exit(1);
     }
   });
-
 
 program
   .command('resolve')
@@ -186,6 +186,5 @@ program
       console.error('CLIMOS: Failed to update resolved status:', error.response?.data?.error || error.message);
     }
   });
-
 
 program.parse(process.argv);

@@ -1,0 +1,43 @@
+model:
+  arch: video_llama
+  model_type: llama_v2
+  max_txt_len: 512
+  end_sym: "###"
+  prompt_template: "###Human: {}\n###Assistant: "
+  ckpt: 'checkpoints/video_llama_13b_lora_v2.pth'
+
+  # Llama-2 configuration
+  llama_model: 'checkpoints/llama-2-13b-chat'
+  lora_r: 64
+  lora_alpha: 16
+  lora_dropout: 0.05
+
+  # VideoLLaMA specific
+  video_frames: 32
+  sample_rate: 22050
+  max_audio_duration: 30
+  audio_sample_rate: 16000
+  audio_max_target_len: 480000
+  audio_length_threshold: 1024
+
+preprocess:
+  video:
+    input_res: 224
+    center_crop: True
+    random_flip: False
+    normalize: True
+
+  audio:
+    feature_extractor: 'checkpoints/whisper-small'
+    max_length: 30
+    sampling_rate: 16000
+
+generation:
+  max_new_tokens: 512
+  min_length: 1
+  num_beams: 5
+  temperature: 0.9
+  top_p: 0.9
+  length_penalty: 1.0
+  repetition_penalty: 1.0
+  no_repeat_ngram_size: 3
